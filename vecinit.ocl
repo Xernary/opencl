@@ -1,0 +1,4 @@
+void kernel init_kernel(global int* vec){
+    int i = get_global_id(0);
+    vec[i] = i+2;
+  }
