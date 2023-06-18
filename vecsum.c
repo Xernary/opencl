@@ -1,8 +1,32 @@
 #include <stdlib.h>
 #include "ocl_boiler.h"
 
-cl_evt init_arrays(cl_command_queue que, int n, int dws){
-  if(lws <= 0) lws = 
+void verify(int* array, int n){
+  for(int i = 0; i < n; i++)
+    if(array[i] != n){
+      perror("result array values are not correct\n");
+      exit(-1);
+    }
+}
+
+cl_evt init_arrays(cl_kernel kernel, cl_command_queue que, int n, int lws){
+  if(lws <= 0) lws = 256;
+
+  cl_evt evt;
+  cl_int err;
+  err = clEnqueueNDRangeKernel(que, kernel, 1, 0, n, lws, 0, NULL, evt);
+  ocl_check(err, "starting init kernel");
+  return evt;
+}
+
+cl_evt sum_arrays(cl_kernel kernel, cl_command_queue que, int n, int lws){
+  if(lws <= 0) lws = 256;
+
+  cl_evt evt;
+  cl_int err;
+  err = clEnqueueNDRangeKernel(que, kernel, 1, 0, n, lws, 0, NULL, evt);
+  ocl_check(err, "starting sum kernel");
+  return evt;
 }
 
 int main(int argn, char* args){
@@ -28,6 +52,10 @@ int main(int argn, char* args){
   cl_kernel init_kernel = clCreateKernel(prog, "vecinit.ocl", err);
   ocl_check(err, "creating kernel");
 
+  // create kernel object
+  cl_kernel sum_kernel = clCreateKernel(prog, "vecsum.ocl", err);
+  ocl_check(err, "creating kernel");
+
   // create memory buffer on device
   cl_mem d_array1 = clCreateBuffer(ctx, CL_MEM_READ_ONLY, sizeof(int)*n, NULL, &err);
   ocl_check(err, "creating input 1 buffer");
@@ -42,10 +70,10 @@ int main(int argn, char* args){
   int* h_array = clEnqueueMapBuffer(que, d_result, TRUE, CL_MAP_READ, 0, n, 0, NULL, NULL, err);
 
   // execute init kernels (via wrapped kernel function)
-  cl_evt init_evt = init_arrays(que, n, lws); 
+  cl_evt init_evt = init_arrays(init_kernel, que, n, lws); 
 
   // wait for init kernel event completed and execute sum kernel (via wrapped kernel function)
-  cl_evt sum_evt = sum_arrays(que, n, lws);
+  cl_evt sum_evt = sum_arrays(sum_kernel, que, n, lws);
 
   // read the result from host array pointer (mapped memory) 
   verify_sum(h_array, n); 
