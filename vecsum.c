@@ -13,13 +13,13 @@ void verify_sum(int* array, int n){
 }
 
 cl_event init_arrays(cl_kernel kernel, cl_command_queue que, int n, int lws, 
-                     cl_mem d_array1, cl_mem d_array2){
-  if(lws <= 0) lws = 16;
-  
-  size_t gws[] = { n };
-  size_t lws_[] = { (size_t) lws };
+                     int preferred_local_work_size, cl_mem d_array1, cl_mem d_array2){
+  size_t lws_[] = { lws > 0 ? (size_t) lws : (size_t) preferred_local_work_size };
+  size_t gws[] = { round_mul_up(n, lws_[0]) };
+
   cl_event evt;
   cl_int err;
+
   err = clSetKernelArg(kernel, 0, sizeof(d_array1), &d_array1);
   ocl_check(err, "setting kernel arg");
   err = clSetKernelArg(kernel, 1, sizeof(d_array2), &d_array2);
@@ -29,19 +29,20 @@ cl_event init_arrays(cl_kernel kernel, cl_command_queue que, int n, int lws,
   err = clEnqueueNDRangeKernel(que, kernel, 1, NULL, gws, lws_, 0, NULL, &evt);
   printf("lws: %d\n", lws);
   ocl_check(err, "starting init kernel");
+
   return evt;
 }
 
 cl_event sum_arrays(cl_kernel kernel, cl_command_queue que, int n, int lws, 
-                    cl_mem d_array1, cl_mem d_array2, cl_mem d_result,
-                    cl_event evt_wait){
-  if(lws <= 0) lws = 16;
+                    int preferred_local_work_size, cl_mem d_array1, cl_mem d_array2, 
+                    cl_mem d_result, cl_event evt_wait){
+ 
+  size_t lws_[] = { lws > 0 ? (size_t) lws : (size_t) preferred_local_work_size };
+  size_t gws[] = { round_mul_up(n, lws_[0]) };
   
-  size_t gws[] = { n };
-  size_t lws_[] = { (size_t) lws };
-
   cl_event evt;
   cl_int err;
+  
   err = clSetKernelArg(kernel, 0, sizeof(d_array1), &d_array1);
   ocl_check(err, "setting kernel arg");
   err = clSetKernelArg(kernel, 1, sizeof(d_array2), &d_array2);
@@ -52,6 +53,7 @@ cl_event sum_arrays(cl_kernel kernel, cl_command_queue que, int n, int lws,
   ocl_check(err, "setting kernel arg");
   err = clEnqueueNDRangeKernel(que, kernel, 1, NULL, gws, lws_, 1, &evt_wait, &evt);
   ocl_check(err, "starting sum kernel");
+ 
   return evt;
 }
 
@@ -91,15 +93,27 @@ int main(int argn, char* args[]){
 
   cl_mem d_result = clCreateBuffer(ctx, CL_MEM_WRITE_ONLY, sizeof(int)*n, NULL, &err);
   ocl_check(err, "creating output buffer");
-
+  
+  // get kernel preferred lws
+  int preferred_local_work_size;
+  size_t size = sizeof(int);
+  err = clGetKernelWorkGroupInfo(init_kernel, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, 
+                                 1, &preferred_local_work_size, &size);
+  ocl_check(err, "get preferred lws multiple");
+  printf("preferred lws: %d\n", preferred_local_work_size);
 
   // execute init kernels (via wrapped kernel function)
   cl_event init_evt = init_arrays(init_kernel, que, n, lws, 
-                                  d_array1, d_array2); 
+                                  preferred_local_work_size, d_array1, d_array2); 
 
+  // get kernel preferred lws
+  err = clGetKernelWorkGroupInfo(sum_kernel, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, 
+                                 1, &preferred_local_work_size, &size);
+  ocl_check(err, "get preferred lws multiple");
   // wait for init kernel event completed and execute sum kernel (via wrapped kernel function)
   cl_event sum_evt = sum_arrays(sum_kernel, que, n, lws, 
-                                d_array1, d_array2, d_result, init_evt);
+                                preferred_local_work_size, d_array1, d_array2, 
+                                d_result, init_evt);
   
   // map device output buffer to memory
   cl_event map_evt;
