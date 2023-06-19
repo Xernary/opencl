@@ -95,11 +95,10 @@ int main(int argn, char* args[]){
   ocl_check(err, "creating output buffer");
   
   // get kernel preferred lws
-  int preferred_local_work_size;
+  size_t preferred_local_work_size;
   size_t size = sizeof(int);
-  err = clGetKernelWorkGroupInfo(init_kernel, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, 
-                                 1, &preferred_local_work_size, &size);
-  ocl_check(err, "get preferred lws multiple");
+  err = clGetKernelWorkGroupInfo(init_kernel, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(preferred_local_work_size), &preferred_local_work_size, NULL);
+  ocl_check(err, "get preferred lws multiple init");
   printf("preferred lws: %d\n", preferred_local_work_size);
 
   // execute init kernels (via wrapped kernel function)
@@ -107,9 +106,8 @@ int main(int argn, char* args[]){
                                   preferred_local_work_size, d_array1, d_array2); 
 
   // get kernel preferred lws
-  err = clGetKernelWorkGroupInfo(sum_kernel, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, 
-                                 1, &preferred_local_work_size, &size);
-  ocl_check(err, "get preferred lws multiple");
+  err = clGetKernelWorkGroupInfo(sum_kernel, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(preferred_local_work_size), &preferred_local_work_size, NULL);
+  ocl_check(err, "get preferred lws multiple sum");
   // wait for init kernel event completed and execute sum kernel (via wrapped kernel function)
   cl_event sum_evt = sum_arrays(sum_kernel, que, n, lws, 
                                 preferred_local_work_size, d_array1, d_array2, 
