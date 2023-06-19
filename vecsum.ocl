@@ -4,12 +4,14 @@ void kernel sum_kernel(global int* array1,
                        int n)
 {       
         int i = get_global_id(0);
+        if(i>n) return;
         result[i] = array1[i] + array2[i];
   }
 void kernel init_kernel(global int* vec1,
                         global int* vec2,
                         int n){
     int i = get_global_id(0);
+    if(i>n) return;
     vec1[i] = i;
     vec2[i] = n - i;
 }
