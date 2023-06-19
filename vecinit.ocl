@@ -1,4 +1,7 @@
-void kernel init_kernel(global int* vec){
+void kernel init_kernel(global int* vec1,
+                        global int* vec2,
+                        int n){
     int i = get_global_id(0);
-    vec[i] = i+2;
-  }
+    vec1[i] = i;
+    vec2[i] = n - i;
+}
