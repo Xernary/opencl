@@ -1,0 +1,16 @@
+void kernel init_kernel(global int* array,
+                        int n){
+    int i = get_global_id(0);
+    if(i>=n) return;
+
+    array[i] = i;
+}
+
+void kernel smooth_kernel(global int* input,
+                          global int* result,
+                          int n){
+    int i = get_global_id(0);
+    if(i>=n) return;
+
+    result[i] = (input[i-1] + input[i] + input[i+1]) / 3;
+  }
