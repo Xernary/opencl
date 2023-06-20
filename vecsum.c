@@ -91,7 +91,7 @@ int main(int argn, char* args[]){
   cl_mem d_array2 = clCreateBuffer(ctx, CL_MEM_READ_ONLY, sizeof(int)*n, NULL, &err);
   ocl_check(err, "creating input 2 buffer");
 
-  cl_mem d_result = clCreateBuffer(ctx, CL_MEM_WRITE_ONLY, sizeof(int)*n, NULL, &err);
+  cl_mem d_result = clCreateBuffer(ctx, CL_MEM_READ_WRITE, sizeof(int)*n, NULL, &err);
   ocl_check(err, "creating output buffer");
   
   // get kernel preferred lws
