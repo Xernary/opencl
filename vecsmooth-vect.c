@@ -54,10 +54,7 @@ cl_event smooth_array(cl_kernel kernel, cl_mem d_input,
   err = clSetKernelArg(kernel, 1, sizeof(d_result), &d_result);
   ocl_check(err, "set smooth kernel arg");
 
-  err = clSetKernelArg(kernel, 2, sizeof(cl_int)*(lws[0]+2), NULL);
-  ocl_check(err, "set smooth kernel lmem arg");
-
-  err = clSetKernelArg(kernel, 3, sizeof(int), &n);
+  err = clSetKernelArg(kernel, 2, sizeof(int), &n);
   ocl_check(err, "set smooth kernel arg");
 
   cl_event evt;
@@ -79,6 +76,11 @@ int main (int argn, char* args[]){
   int n = atoi(args[1]);
   int lws = atoi(args[2]);
 
+  if(n & 3){
+    printf("number of elements must be multiple of 4\n");
+    exit(1);
+  }
+
   cl_int err;
 
   // boiler
@@ -86,12 +88,12 @@ int main (int argn, char* args[]){
   cl_device_id d = select_device(p);
   cl_context ctx = create_context(p, d);
   cl_command_queue que = create_queue(ctx, d);
-  cl_program prog = create_program("vecsmooth.ocl", ctx, d);
+  cl_program prog = create_program("vecsmooth-vect.ocl", ctx, d);
 
   cl_kernel init_kernel = clCreateKernel(prog, "init_kernel", &err);
   ocl_check(err, "creating init kernel object");
 
-  cl_kernel smooth_kernel = clCreateKernel(prog, "smooth_kernel", &err);
+  cl_kernel smooth_kernel = clCreateKernel(prog, "smooth_kernel_vect", &err);
   ocl_check(err, "creating kernel object");
 
   // allocate memory
@@ -108,7 +110,7 @@ int main (int argn, char* args[]){
  
   // execute smooth kernel
   cl_event smooth_evt = smooth_array(smooth_kernel, d_input, d_result, 
-                                     n, lws, 32, que, init_evt);
+                                     n/4, lws, 32, que, init_evt);
   
   cl_event map_evt;
   int* h_result = clEnqueueMapBuffer(que, d_result, CL_TRUE, 

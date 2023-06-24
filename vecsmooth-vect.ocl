@@ -1,0 +1,36 @@
+void kernel init_kernel(global int* array, 
+			int n){  
+    int i = get_global_id(0);
+    if(i>=n) return;
+
+    array[i] = i;
+}
+
+void kernel smooth_kernel_vect(const global int4* input,
+                          global int4* result,
+                          int nquarts){
+    int i = get_global_id(0);
+
+    if(i>=nquarts) return;
+    
+    int4 curr = input[i];
+    int4 div = (int4) (2, 3, 3, 2);
+    int4 prev = (int4)(0, curr.s012);
+    int4 next = (int4) (curr.s123, 0);
+
+    if(i != 0){
+	div.x++;
+	prev.x = input[i-1].w;
+    }
+
+    if(i != nquarts-1){
+	div.w++;
+	next.w = input[i+1].x;
+    }
+    
+    result[i] = (prev + curr + next) / div;
+
+
+    // result[i] = (input[i-1] + input[i] + input[i+1]) / nels;
+    // result[i] = (lmem[local_id-1] + lmem[local_id] + lmem[local_id+1]) / 3;
+  }
