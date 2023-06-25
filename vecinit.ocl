@@ -5,3 +5,14 @@ void kernel init_kernel(global int* vec1,
     vec1[i] = i;
     vec2[i] = n - i;
 }
+
+void kernel mat_init_kernel(global int* array,
+                     int rows,
+                     int cols){
+    int r = get_global_id(1);
+    int c = get_global_id(0);
+
+    if(r>=rows || c>=cols) return;
+
+    array[c*rows+r] = r - c;
+  }
