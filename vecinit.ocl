@@ -9,8 +9,19 @@ void kernel init_kernel(global int* vec1,
 void kernel mat_init_kernel(global int* array,
                      int rows,
                      int cols){
-    int r = get_global_id(1);
-    int c = get_global_id(0);
+    int r = get_global_id(0);
+    int c = get_global_id(1);
+
+    if(r>=rows || c>=cols) return;
+
+    array[c*rows+r] = r - c;
+  }
+
+void kernel mat_init_kernel_vec(global int* array,
+                     int4 row_quads,
+                     int4 col_quads){
+    int r = get_global_id(0);
+    int c = get_global_id(1);
 
     if(r>=rows || c>=cols) return;
 

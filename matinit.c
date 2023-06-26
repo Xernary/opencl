@@ -66,8 +66,8 @@ int main(int argn, char* args[]){
 
 void verify(const int* array, int n, int rows){
   for(int i = 0; i < n; i++){
-    int r = i/rows;
-    int c = i%rows;
+    int r = i%rows;
+    int c = i/rows;
     int expected = r-c;
     if(array[c*rows + r] != expected){
       fprintf(stderr, "mismatch @ [%d][%d]: %d != %d\n", r, c, 
