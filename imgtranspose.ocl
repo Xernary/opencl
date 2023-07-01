@@ -1,0 +1,30 @@
+kernel void init_array(write_only image2d_t img){
+	
+	int r = get_global_id(1);
+	int c = get_global_id(0);
+
+	int nrows = get_image_height(img);
+	int ncols = get_image_width(img);
+
+	if(r >= nrows || c >= ncols) return;
+
+	write_imagei(img, (int2)(c, r), (int4)(r-c, 0, 0, 0));
+}
+
+
+kernel void transpose_array(read_only image2d_t input,
+			    global int* output,
+			    int pitch_el){
+	
+	int r = get_global_id(1);
+	int c = get_global_id(0);
+
+	int out_ncols = get_image_width(input);
+	int out_nrows = get_image_height(input);
+
+	if(r >= out_nrows || c >= out_ncols) return;
+
+	int4 px = read_imagei(input, (int2)(r, c));
+
+	output[r * pitch_el + c] = px.x;
+} 
