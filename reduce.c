@@ -127,16 +127,17 @@ int main(int argn, char* args[]){
                                  preferred_init_lws, d_input);
   int steps = log(nels)/log(4);
   cl_event reduce_evts[steps + 1];
+  int current_nels = nels;
   reduce_evts[0] = init_evt;
   for(int i = 1; i <= steps; i++){
 
-    reduce_evts[i] = reduce(reduce_kernel_v1, que, nels, lws,
+    reduce_evts[i] = reduce(reduce_kernel_v1, que, current_nels/4, lws,
                             preferred_reduce_v1_lws, d_input,
                             d_output, reduce_evts[i-1]);
     cl_mem temp = d_input;
     d_input = d_output;
     d_output = temp;
-
+    current_nels /= 4;
   }
 
   int* h_result;
