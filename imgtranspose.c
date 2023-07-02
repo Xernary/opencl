@@ -20,12 +20,23 @@ void verify(const int* array, int nrows, int ncols, int pitch_el){
     }
 }
 
+void verify_lmem(const int* array, int nrows, int ncols){
+  for(int r = 0; r < nrows; r++)
+    for(int c = 0; c < ncols; c++){
+      int val = array[r*ncols + c];
+      int expected = c-r;
+      if(expected != val)
+        fprintf(stderr, "mismatch #[%d][%d] : %d != %d\n", r, c,
+                val, expected);
+    }
+}
+
 cl_event init_array(cl_kernel kernel, cl_mem d_input,
                      int nrows, int ncols, int lws_arg,
                      cl_command_queue que){
   cl_int err;
-  size_t lws[] = { (size_t) lws_arg, (size_t) lws_arg };
-  size_t gws[] = { (size_t) (round_mul_up(nrows, lws[0])), (size_t) (round_mul_up(ncols, lws[1])) };
+  size_t lws[] = { lws_arg, lws_arg };
+  size_t gws[] = { (round_mul_up(ncols, lws[0])), (round_mul_up(nrows, lws[1])) };
 
   // set kernel args
   err = clSetKernelArg(kernel, 0, sizeof(d_input), &d_input);
@@ -39,14 +50,39 @@ cl_event init_array(cl_kernel kernel, cl_mem d_input,
   return evt;
 }
 
+
+cl_event init_array_lmem(cl_kernel kernel, cl_mem d_input,
+                     int nrows, int ncols, int lws_arg,
+                     cl_command_queue que){
+  cl_int err;
+  size_t lws[] = { lws_arg, lws_arg };
+  size_t gws[] = { (round_mul_up(ncols, lws[0])), (round_mul_up(nrows, lws[1])) };
+
+  // set kernel args
+  err = clSetKernelArg(kernel, 0, sizeof(d_input), &d_input);
+  ocl_check(err, "set init lmem kernel arg");
+
+  err = clSetKernelArg(kernel, 1, sizeof(int), &nrows);
+  ocl_check(err, "set init lmem kernel arg");
+
+  err = clSetKernelArg(kernel, 2, sizeof(int), &ncols);
+  ocl_check(err, "set init lmem kernel arg");
+
+  cl_event evt;
+  err = clEnqueueNDRangeKernel(que, kernel, 2, NULL, gws, lws, 
+                               0, NULL, &evt);
+  ocl_check(err, "execute init lmem kernel");
+
+  return evt;
+}
 cl_event transpose(cl_kernel kernel, cl_mem d_input,
                       cl_mem d_output, int nrows, int ncols, int pitch_el,
                       int lws_arg,
                       cl_command_queue que, 
                       cl_event init_evt){
   cl_int err;
-  size_t lws[] = { (size_t) lws_arg, (size_t) lws_arg };
-  size_t gws[] = { (size_t) (round_mul_up(nrows, lws[0])), (size_t) (round_mul_up(ncols, lws[1])) };
+  size_t lws[] = { lws_arg,  lws_arg };
+  size_t gws[] = { (round_mul_up(nrows, lws[0])),  (round_mul_up(ncols, lws[1])) };
 
   // set kernel args
   err = clSetKernelArg(kernel, 0, sizeof(d_input), &d_input);
@@ -59,7 +95,40 @@ cl_event transpose(cl_kernel kernel, cl_mem d_input,
   ocl_check(err, "set transpose kernel arg");
 
   cl_event evt;
-  err = clEnqueueNDRangeKernel(que, kernel, 1, 0, gws, lws, 
+  err = clEnqueueNDRangeKernel(que, kernel, 2, NULL, gws, lws, 
+                               1, &init_evt, &evt);
+  ocl_check(err, "execute transpose kernel");
+
+  return evt;
+}
+
+cl_event transpose_lmem(cl_kernel kernel, cl_mem d_input,
+                      cl_mem d_output, int nrows, int ncols, 
+                      int lws_arg,
+                      cl_command_queue que, 
+                      cl_event init_evt){
+  cl_int err;
+  size_t lws[] = { lws_arg,  lws_arg };
+  size_t gws[] = { (round_mul_up(nrows, lws[0])),  (round_mul_up(ncols, lws[1])) };
+
+  // set kernel args
+  err = clSetKernelArg(kernel, 0, sizeof(d_input), &d_input);
+  ocl_check(err, "set transpose lmem kernel arg 0");
+
+  err = clSetKernelArg(kernel, 1, sizeof(int), &ncols);
+  ocl_check(err, "set transpose lmem kernel arg 1");
+
+  err = clSetKernelArg(kernel, 2, sizeof(int), &nrows);
+  ocl_check(err, "set transpose lmem kernel arg 2");
+
+  err = clSetKernelArg(kernel, 3, sizeof(cl_int) * lws_arg * lws_arg, NULL);
+  ocl_check(err, "set transpose lmem kernel arg 3");
+
+  err = clSetKernelArg(kernel, 4, sizeof(d_output), &d_output);
+  ocl_check(err, "set transpose lmem kernel arg 4");
+
+  cl_event evt;
+  err = clEnqueueNDRangeKernel(que, kernel, 2, NULL, gws, lws, 
                                1, &init_evt, &evt);
   ocl_check(err, "execute transpose kernel");
 
@@ -67,9 +136,10 @@ cl_event transpose(cl_kernel kernel, cl_mem d_input,
 }
 
 
+
 int main (int argn, char* args[]){
   
-  if(argn <= 3){
+  if(argn <= 4){
     printf("must specify rows, cols and lws\n");
     exit(1);
   }
@@ -77,6 +147,7 @@ int main (int argn, char* args[]){
   int nrows = atoi(args[1]);
   int ncols = atoi(args[2]);
   int lws = atoi(args[3]);
+  int kernel_id = atoi(args[4]);
 
   cl_int err;
 
@@ -92,7 +163,22 @@ int main (int argn, char* args[]){
 
   cl_kernel transpose_kernel = clCreateKernel(prog, "transpose_array", &err);
   ocl_check(err, "creating kernel object");
-  
+
+  cl_kernel transpose_lmem_kernel = clCreateKernel(prog, "transpose_lmem", &err);
+  ocl_check(err, "creating kernel object");
+
+  cl_kernel init_kernel_lmem = clCreateKernel(prog, "init_array_lmem", &err);
+  ocl_check(err, "creating kernel object");
+
+  cl_event init_evt;
+  cl_mem d_input;
+  cl_event map_evt;
+  cl_mem d_result;
+  cl_event transpose_evt;
+  int* h_result;
+
+  if(kernel_id == 0){
+      
   size_t memsize = sizeof(cl_int) * nrows * ncols;
 
   cl_image_format array_format = { .image_channel_order = CL_R, 
@@ -119,33 +205,69 @@ int main (int argn, char* args[]){
 	printf("pitch: %d => %zu\n", nrows, pitch_el);
   
   // allocate memory
-  cl_mem d_input = clCreateImage(ctx, CL_MEM_READ_WRITE, 
+  d_input = clCreateImage(ctx, CL_MEM_READ_WRITE, 
                                   &array_format, &in_desc, NULL, &err);
   ocl_check(err, "allocate input image");
 
   size_t memsize_pitch = pitch_byte * ncols;
-  cl_mem d_result = clCreateBuffer(ctx, CL_MEM_READ_WRITE, 
-                                  memsize, NULL, &err);
+  d_result = clCreateBuffer(ctx, CL_MEM_READ_WRITE, 
+                                  memsize_pitch, NULL, &err);
   ocl_check(err, "allocate result buffer");
 
   // execute init kernel
-  cl_event init_evt = init_array(init_kernel, d_input, nrows, ncols, 
+  init_evt = init_array(init_kernel, d_input, nrows, ncols, 
                                  lws, que);
  
   // execute transpose kernel
-  cl_event transpose_evt = transpose(transpose_kernel, d_input,
+  transpose_evt = transpose(transpose_kernel, d_input,
                                            d_result, nrows, ncols, pitch_el,
                                            lws, que, init_evt);
   
-  cl_event map_evt;
-  int* h_result = clEnqueueMapBuffer(que, d_result, CL_TRUE, 
+  map_evt;
+  h_result = clEnqueueMapBuffer(que, d_result, CL_TRUE, 
                                      CL_MAP_READ, 0, memsize_pitch, 
-                                     1, &init_evt, &map_evt, &err); 
+                                     1, &transpose_evt, &map_evt, &err); 
   ocl_check(err, "map buffer");
   
   verify(h_result, ncols, nrows, pitch_el);
 
   clEnqueueUnmapMemObject(que, d_result, h_result, 0, NULL, NULL);
+
+  }
+
+  if(kernel_id == 1){
+    
+  size_t memsize = sizeof(cl_int) * nrows * ncols;
+
+  // allocate memory
+  d_input = clCreateBuffer(ctx, CL_MEM_READ_WRITE, 
+                                  memsize, NULL, &err);
+  ocl_check(err, "allocate input buff");
+
+  d_result = clCreateBuffer(ctx, CL_MEM_READ_WRITE, 
+                                  memsize, NULL, &err);
+  ocl_check(err, "allocate result buffer");
+
+  // execute init kernel
+  init_evt = init_array_lmem(init_kernel_lmem, d_input, nrows, ncols, 
+                                 lws, que);
+ 
+  // execute transpose kernel
+  transpose_evt = transpose_lmem(transpose_lmem_kernel, d_input,
+                                           d_result, nrows, ncols,
+                                           lws, que, init_evt);
+  
+  map_evt;
+  h_result = clEnqueueMapBuffer(que, d_result, CL_TRUE, 
+                                     CL_MAP_READ, 0, memsize, 
+                                     1, &transpose_evt, &map_evt, &err); 
+  ocl_check(err, "map buffer");
+  
+  verify_lmem(h_result, ncols, nrows);
+
+  clEnqueueUnmapMemObject(que, d_result, h_result, 0, NULL, NULL);
+
+  }
 
   // benchmarks
   double init_time = runtime_ms(init_evt);
