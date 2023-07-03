@@ -1,0 +1,59 @@
+void kernel init_array(global int* input,
+		       int nels){
+	
+	int i = get_global_id(0);
+
+	if(i >= nels) return;
+
+	input[i] = i;
+}
+
+void kernel reduce_v1(global int4* restrict input,
+		      int nquads,
+		      global int* restrict output){
+
+	int i = get_global_id(0);
+
+	if(i>=nquads) return;
+
+	int4 el = input[i];
+	output[i] = (el.x + el.y) + (el.z + el.w);	
+	
+	//printf("%d + %d + %d + %d = %d\n",
+	//	el.x, el.y, el.z, el.w, output[i]);
+}
+
+void kernel reduce_lmem(global int4* restrict input,
+		        int nquads,
+		        global int* restrict output,
+			local int* lmem){
+
+	int i = get_global_id(0);
+
+	if(i<nquads){
+		int4 el = input[i];
+		lmem[i] = (el.x + el.y) + (el.z + el.w);
+	}
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+	
+	if(i >= nquads) return;
+
+	int sum = 0;
+	if(get_local_id(0) == 0 && i < nquads){
+		for(int c = 0; c < get_local_size(0); c++){
+			sum += lmem[c];
+		}
+		output[get_group_id(0)] = sum;
+	}
+
+	//printf("%d + %d + %d + %d = %d\n",
+	//	el.x, el.y, el.z, el.w, output[i]);
+}
+
+
+
+
+
+
+
