@@ -1,0 +1,24 @@
+const sampler_t sampler = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
+
+kernel void copy_img(
+	write_only image2d_t out,
+	read_only image2d_t in)
+{
+	int2 img_dim = get_image_dim(in);
+	int2 coord = (int2)( get_global_id(0), get_global_id(1) );
+
+	float2 norm_coord = (convert_float2(coord) + (float2)(0.5f, 0.5f))/convert_float2(img_dim);
+
+	norm_coord = norm_coord/4.0f + (float2)(0.25f, 0.0f);
+
+	float4 px = read_imagef(in, sampler, norm_coord);
+
+	int2 inside = (coord < img_dim);
+	if (! (inside.x && inside.y) ) return;
+
+	write_imagef(out, coord, px);
+}
+
+// 1 x 1
+// coord_i = [ 0, 0 ] [ 0, 0 ]
+// coord_u = [ 0.0f, 1.0f ] [ 0.0f, 1.0f ]
