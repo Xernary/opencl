@@ -1,4 +1,4 @@
 CFLAGS=-O3 -march=native -g
 LDLIBS=-lOpenCL -lm
 
-reduce_lmem:
+reduce_sw:

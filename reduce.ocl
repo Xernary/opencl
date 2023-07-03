@@ -51,6 +51,48 @@ void kernel reduce_lmem(global int4* restrict input,
 	//	el.x, el.y, el.z, el.w, output[i]);
 }
 
+void kernel reduce_sw(global int4* restrict input,
+		        int nquads,
+		        global int* restrict output,
+			local int* lmem){
+
+	int gi = get_global_id(0);
+	int gws = get_global_size(0);
+
+	// read from global memory and sum quads
+	int acc = 0;
+	while(gi < nquads){
+		int4 val0 = (int4) 0;
+		int4 val1 = (int4) 0;
+		int4 val2 = (int4) 0;
+		int4 val3 = (int4) 0;
+		if(gi < nquads) val0 = input[gi];
+		if(gi + gws < nquads) val1 = input[gi +     gws];
+		if(gi + 2*gws < nquads) val2 = input[gi + 2 * gws];
+		if(gi + 3*gws< nquads) val3 = input[gi + 3 * gws];
+		
+		int4 val = (val0 + val1) + (val2 + val3);
+		acc += (val.x + val.y) + (val.z + val.w);
+		gi += 4*gws;
+	}
+	lmem[get_local_id(0)] = acc;
+
+	int lws = get_local_size(0)/2;
+	int li = get_local_id(0);
+		for(int i = lws; i >= 1; i /= 2){
+			barrier(CLK_LOCAL_MEM_FENCE);
+			if(li < lws){
+				acc += lmem[li + lws];
+				lmem[li] = acc;
+			}
+	}
+	
+	if(get_local_id(0) == 0)
+		output[get_group_id(0)] = acc;
+	
+	//printf("%d + %d + %d + %d = %d\n",
+	//	el.x, el.y, el.z, el.w, output[i]);
+}
 
 
 
