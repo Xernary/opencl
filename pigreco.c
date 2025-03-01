@@ -202,6 +202,10 @@ int main(int argn, char* args[]){
   
   // release boiler
   clReleaseKernel(init_kernel);
+<<<<<<< HEAD
+=======
+  clReleaseKernel(reduce_kernel);
+>>>>>>> 237adc0baf8f27ff2192e377357819402c19ff45
 	clReleaseMemObject(d_input);
 	clReleaseMemObject(d_output);
 	clReleaseProgram(prog);
