@@ -1,0 +1,62 @@
+kernel void init_array(global int* input, 
+                       int n,
+                       int pitch_el){
+
+    int r = get_global_id(1);
+    int c = get_global_id(0);
+
+    if(r >= n || c >= n) return;
+
+    float r_float = (float) r;
+    float c_float = (float) c;
+    
+    input[r * pitch_el + c] = 
+      ((r_float + 0.5f)*(r_float + 0.5f) + 
+      (c_float + 0.5f)*(c_float + 0.5f) < n*n ? 1 : 0);
+
+  } 
+
+  kernel void reduce_array(global int4 const * restrict input,
+	                         global int * restrict output,
+	                         local int * lmem,
+	                         int nquarts, int pitch_el){
+
+    int r = get_global_id(1);
+    int c = get_global_id(0);
+      
+    int gi = r * pitch_el + c;
+	  const int gws = get_global_size(0) * get_global_size(1);
+
+	  int acc = 0;
+
+	  while (gi < nquarts) {
+		  int4 val0 = (int4)0, val1 = (int4) 0,
+		      val2 = (int4) 0 , val3 = (int4) 0;
+		  if (gi < nquarts) val0 = input[gi];
+		  if (gi + gws < nquarts) val1 = input[gi + gws];
+		  if (gi + 2*gws < nquarts) val2 = input[gi + 2*gws];
+		  if (gi + 3*gws < nquarts) val3 = input[gi + 3*gws];
+
+		  int4 val = (val0 + val1) + (val2 + val3);
+		  acc += (val.x + val.y) + (val.z + val.w);
+
+		  gi += 4*gws;
+	}
+
+	int li = get_local_id(1) * get_local_size(0) + get_local_id(0);
+
+	lmem[li] = acc;
+	for (int lws = (get_local_size(0)*get_local_size(1))/2; 
+		lws >= 1; lws /=2 )
+	{
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (li < lws) {
+			acc += lmem[li + lws];
+			lmem[li] = acc;
+		}
+	}
+
+	if (li == 0)
+		output[get_group_id(0)] = acc;
+
+    }

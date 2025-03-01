@@ -1,0 +1,79 @@
+kernel void
+init_kernel(global int * restrict in, int nels) {
+	const int gi = get_global_id(0);
+
+	if (gi >= nels) return;
+
+	in[gi] = gi;
+}
+
+kernel void scan(
+	global int4 * restrict out,
+	global int * restrict tails,
+	global const int4 * restrict in,
+	int nels,
+	local int *lmem)
+{
+	int gi = get_global_id(0);
+	int4 val = (int4)(0);
+	if (gi < nels) {
+		val = in[gi];
+#if 0
+		// start: 4 5 6 7
+		val.s1 += val.s0; // 4 9 6 7
+		val.s2 += val.s1; // 4 9 15 7
+		val.s3 += val.s2; // 4 9 15 22
+#else
+		// start: 4 5 6 7
+		val.s13 += val.s02; // 4 9 6 13 // val.s1 += val.s0 ; val.s3 += val.s2;
+		val.s23 += (int2)(val.s1); // 4 9 15 22
+
+#if 0
+		// int16 version:
+		val.odd += val.even; // seconda metÃ  di ogni coppia
+		val.s2367abef += val.s115599dd; // seconda metÃ  di ogni quartetto
+		val.s4567cdef += val.s3333bbbb; // seconda metÃ  di ogni ottetto
+		val.hi += (int16)(val.s7); // seconda metÃ  della sedicina
+#endif
+#endif
+	}
+
+	const int li = get_local_id(0);
+
+	lmem[li] = val.s3;
+
+	const int lws = get_local_size(0);
+
+	for (int active_mask = 1; active_mask < lws; active_mask *= 2) {
+		int pull_mask = active_mask - 1;
+		pull_mask = ~pull_mask;
+		pull_mask = li & pull_mask;
+		pull_mask = pull_mask - 1;
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (li & active_mask) lmem[li] += lmem[pull_mask];
+	}
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	if (li > 0)
+		val += (int4)(lmem[li - 1]);
+
+	out[gi] = val;
+
+	if (get_num_groups(0) > 1 && li == 0) {
+		tails[get_group_id(0)] = lmem[get_local_size(0)-1];
+	}
+}
+
+kernel void scan_fixup(
+	global int4 * restrict out,
+	global const int * restrict tails,
+	int nels)
+{
+	int gi = get_global_id(0);
+	int group = get_group_id(0);
+	if (group > 0 && gi < nels) {
+		int fixup = tails[group-1];
+		out[gi] += (int4)(fixup);
+	}
+}
+
